@@ -1,0 +1,30 @@
+# When using rust/ inside the original repository, move this workflow to the
+# repository's .github/workflows/ and set working-directory: rust for cargo steps.
+name: Rust checks
+on: [push, pull_request]
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y m4 build-essential
+      - run: cargo fmt --check
+      - run: cargo test --locked --no-default-features
+      - run: cargo clippy --locked --no-default-features --all-targets -- -D warnings
+  sdl-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y m4 cmake build-essential
+      - run: cargo build --locked --features bundled-sdl,sdl3/build-from-source-unix-console
+      - run: target/debug/abyss --width 64 --height 48 --threads 2 --iterations 128 explore
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_RENDER_DRIVER: software
+          ABYSS_SMOKE_FRAMES: 60

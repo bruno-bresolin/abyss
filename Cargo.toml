@@ -1,0 +1,30 @@
+[package]
+name = "abyss"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Progressive SDL3 Mandelbrot explorer and deterministic deep zoom film renderer"
+license = "BSD-3-Clause"
+
+[features]
+default = ["desktop"]
+desktop = ["dep:sdl3"]
+bundled-sdl = ["desktop", "sdl3/build-from-source-static"]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+crossbeam-channel = "0.5"
+png = "0.17"
+rayon = "1.10"
+rug = { version = "1.30", default-features = false, features = ["float", "integer", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sdl3 = { version = "0.22.1", optional = true }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[lints.rust]
+unsafe_code = "forbid"
