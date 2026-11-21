@@ -29,11 +29,10 @@ então o grava. O tempo de renderização não altera a velocidade do vídeo.
 - `#![forbid(unsafe_code)]` no código do aplicativo. SDL e GMP/MPFR são dependências nativas
   encapsuladas pelos seus bindings; isso não torna suas implementações C formalmente seguras.
 
-**Divisão real do trabalho:** CPU = referência, BLA, órbitas, reparos e cor;
-GPU = composição e movimento das imagens; RAM = cache e filas limitadas.
-Não há shader de compute para as órbitas nesta versão. O modo offline é CPU.
-SDL pode escolher um backend de software se não houver aceleração disponível;
-o backend escolhido aparece no terminal.
+O SDL3 compõe a imagem e informa o backend escolhido no terminal. Com a feature
+opcional `gpu`, o explorador também pode calcular órbitas em uma GPU Intel,
+AMD ou NVIDIA. A CPU aplica a paleta e continua responsável pelo cálculo de zoom profundo
+e pelos modos offline.
 
 ## Compilar
 
@@ -75,6 +74,36 @@ cargo run --locked --release --features bundled-sdl -- \
   --width 1280 --height 720 --iterations 12000 --memory-mb 1024 \
   --location examples/seahorse.json explore
 ```
+
+### Cálculo em GPU Intel, AMD ou NVIDIA
+
+```sh
+cargo run --locked --release --features gpu,bundled-sdl -- --gpu intel explore
+cargo run --locked --release --features gpu,bundled-sdl -- --gpu amd explore
+cargo run --locked --release --features gpu,bundled-sdl -- --gpu nvidia explore
+```
+
+A placa selecionada precisa oferecer Vulkan e cálculo em precisão dupla
+(`shaderFloat64`). Se ela não aparecer e houver pacotes Vulkan ausentes, o
+Abyss mostra o comando e pede confirmação no terminal antes de executá-lo
+com `sudo`. A instalação guiada usa `apt-get` no Debian e Ubuntu e `dnf`
+no Fedora. Pressione Enter ou responda `n` para continuar com a CPU.
+Pacotes Mesa Vulkan de cada distribuição: [Debian](https://packages.debian.org/stable/mesa-vulkan-drivers),
+[Ubuntu](https://packages.ubuntu.com/noble/mesa-vulkan-drivers) e
+[Fedora](https://packages.fedoraproject.org/pkgs/mesa/mesa-vulkan-drivers/).
+
+Em placas NVIDIA, o Abyss usa o driver Vulkan disponível no sistema, desde que
+ele exponha `shaderFloat64` para a placa. A instalação guiada oferece os pacotes
+do carregador Vulkan e do Mesa. A instalação do driver proprietário NVIDIA é
+gerenciada separadamente pela distribuição. Consulte a
+[documentação do driver NVIDIA](https://download.nvidia.com/XFree86/Linux-x86_64/615.78.08/README/installedcomponents.html)
+e a [documentação do Mesa NVK](https://docs.mesa3d.org/drivers/nvk.html).
+
+O explorador volta ao cálculo na CPU se a placa estiver indisponível ou houver
+falha no Vulkan. O caminho GPU é usado somente quando o tamanho do pixel
+é de pelo menos `1e-9` no plano complexo e o limite de iterações é de até
+`16384`. Isso mantém as vistas profundas no caminho de alta precisão.
+Os comandos `render` e `film` continuam usando a CPU.
 
 | Controle | Ação |
 | --- | --- |
@@ -181,6 +210,7 @@ artefatos. Não há promessa de imagem inédita em 60 FPS em qualquer ponto prof
 | `src/engine.rs` | Referência, cache, BLA, perturbação, rebasing e reparos |
 | `src/scheduler.rs` | Pool, gerações, filas limitadas e cancelamento |
 | `src/desktop.rs` | Eventos SDL3 e composição de texturas |
+| `src/gpu.rs`, `src/mandelbrot.wgsl` | Cálculo opcional de órbitas diretas em Vulkan FP64 |
 | `src/palette.rs` | Paleta contínua e estável |
 | `src/film.rs` | PNG, trajetória, amostragem temporal e codificação |
 | `tests/correctness.rs` | Precisão, comparação MPFR e concorrência |
@@ -200,6 +230,7 @@ reutiliza sua precisão apenas enquanto ela for suficiente para a câmera atual.
 
 ```sh
 cargo fmt --check
+cargo test --locked --features gpu,bundled-sdl
 cargo test --locked --no-default-features
 cargo clippy --locked --no-default-features --all-targets -- -D warnings
 ```
@@ -220,6 +251,6 @@ de desenvolvimento. Isso valida o ciclo SDL, não desempenho de GPU física.
 - https://wiki.libsdl.org/SDL3/README-linux
 
 A implementação atual mantém deltas em `f64` e usa MPFR como reparo. Rescaling
-com expoente estendido, compute de órbitas na GPU, estimativa de distância,
+com expoente estendido, estimativa de distância,
 busca automática de núcleos e trajetórias com múltiplos centros são extensões
 futuras, não funcionalidades simuladas ou declaradas prontas.

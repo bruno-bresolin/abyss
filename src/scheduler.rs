@@ -27,6 +27,17 @@ pub struct Scheduler {
 }
 impl Scheduler {
     pub fn new(settings: Settings) -> anyhow::Result<Self> {
+        Self::start(
+            settings,
+            #[cfg(feature = "gpu")]
+            None,
+        )
+    }
+
+    pub(crate) fn start(
+        settings: Settings,
+        #[cfg(feature = "gpu")] mut gpu: Option<crate::gpu::Gpu>,
+    ) -> anyhow::Result<Self> {
         settings.validate()?;
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(settings.threads)
@@ -53,19 +64,50 @@ impl Scheduler {
                     if cancel() {
                         continue;
                     }
-                    let Some(prepared) = engine.prepare(&request.camera, &settings, &cancel) else {
-                        continue;
-                    };
+                    let mut prepared = None;
                     for divider in [8, 4, 2, 1] {
-                        let frame = pool.install(|| {
-                            prepared.render(
+                        #[cfg(feature = "gpu")]
+                        let frame = if let Some(device) = &gpu
+                            && crate::gpu::Gpu::supports(&request.camera, &settings)
+                        {
+                            match device.render(
                                 &request.camera,
                                 &settings,
                                 request.generation,
                                 divider,
-                                false,
                                 &cancel,
-                            )
+                            ) {
+                                Ok(Some(frame)) => Some(frame),
+                                Ok(None) => break,
+                                Err(error) => {
+                                    eprintln!("Falha no cálculo Vulkan, usando CPU: {error:#}");
+                                    gpu = None;
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                        #[cfg(not(feature = "gpu"))]
+                        let frame = None;
+                        let frame = frame.or_else(|| {
+                            if cancel() {
+                                return None;
+                            }
+                            if prepared.is_none() {
+                                prepared = engine.prepare(&request.camera, &settings, &cancel);
+                            }
+                            let prepared = prepared.as_ref()?;
+                            pool.install(|| {
+                                prepared.render(
+                                    &request.camera,
+                                    &settings,
+                                    request.generation,
+                                    divider,
+                                    false,
+                                    &cancel,
+                                )
+                            })
                         });
                         let Some(mut pending) = frame else {
                             break;

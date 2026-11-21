@@ -23,7 +23,36 @@ struct Layer<'a> {
     arrived: Instant,
 }
 
-pub fn run(mut camera: Camera, settings: Settings) -> Result<()> {
+pub fn run(camera: Camera, settings: Settings) -> Result<()> {
+    run_explorer(
+        camera,
+        settings,
+        #[cfg(feature = "gpu")]
+        None,
+    )
+}
+
+#[cfg(feature = "gpu")]
+pub fn run_with_gpu(
+    camera: Camera,
+    settings: Settings,
+    vendor: crate::gpu::GpuVendor,
+) -> Result<()> {
+    let gpu = match crate::gpu::Gpu::open(vendor) {
+        Ok(gpu) => Some(gpu),
+        Err(error) => {
+            eprintln!("GPU indisponível, usando CPU: {error:#}");
+            None
+        }
+    };
+    run_explorer(camera, settings, gpu)
+}
+
+fn run_explorer(
+    mut camera: Camera,
+    settings: Settings,
+    #[cfg(feature = "gpu")] gpu: Option<crate::gpu::Gpu>,
+) -> Result<()> {
     let sdl = sdl3::init().map_err(|e| anyhow::anyhow!(e.to_string()))?;
     let video = sdl.video().map_err(|e| anyhow::anyhow!(e.to_string()))?;
     sdl3::hint::set("SDL_RENDER_VSYNC", "1");
@@ -37,7 +66,11 @@ pub fn run(mut camera: Camera, settings: Settings) -> Result<()> {
     let mut events = sdl
         .event_pump()
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    let scheduler = Scheduler::new(settings.clone())?;
+    let scheduler = Scheduler::start(
+        settings.clone(),
+        #[cfg(feature = "gpu")]
+        gpu,
+    )?;
     let initial = camera.clone();
     let mut submitted = camera.clone();
     scheduler.submit(camera.clone());

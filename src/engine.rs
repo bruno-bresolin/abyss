@@ -4,6 +4,7 @@ use crate::{
     palette,
 };
 use anyhow::{Result, ensure};
+pub(crate) const DIRECT_PIXEL_SIZE: f64 = 1e-9;
 use rayon::prelude::*;
 use rug::Float;
 use std::sync::{
@@ -354,7 +355,7 @@ impl Prepared {
         let width = settings.width.div_ceil(divider);
         let height = settings.height.div_ceil(divider);
         let step = camera.pixel_size(settings.width);
-        let shallow = step >= 1e-9;
+        let shallow = step >= DIRECT_PIXEL_SIZE;
         let center = C::new(camera.re.to_f64(), camera.im.to_f64());
         let mut rgba = vec![0u8; width as usize * height as usize * 4];
         let repairs = AtomicU64::new(0);

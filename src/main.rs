@@ -28,6 +28,10 @@ struct Cli {
     no_bla: bool,
     #[arg(long)]
     location: Option<PathBuf>,
+    /// Select an Intel, AMD or NVIDIA Vulkan GPU for the interactive explorer.
+    #[cfg(feature = "gpu")]
+    #[arg(long, value_enum)]
+    gpu: Option<abyss::gpu::GpuVendor>,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -50,6 +54,15 @@ enum Command {
 }
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    #[cfg(feature = "gpu")]
+    if cli.gpu.is_some()
+        && matches!(
+            cli.command,
+            Some(Command::Render { .. } | Command::Film { .. })
+        )
+    {
+        anyhow::bail!("--gpu é uma opção do modo explore");
+    }
     let mut settings = Settings {
         width: cli.width,
         height: cli.height,
@@ -100,6 +113,10 @@ fn main() -> Result<()> {
                 Command::Explore => {
                     #[cfg(feature = "desktop")]
                     {
+                        #[cfg(feature = "gpu")]
+                        if let Some(vendor) = cli.gpu {
+                            return abyss::desktop::run_with_gpu(camera, settings, vendor);
+                        }
                         abyss::desktop::run(camera, settings)
                     }
                     #[cfg(not(feature = "desktop"))]
